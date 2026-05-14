@@ -1,0 +1,38 @@
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 80px);
+  gap: 8px;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.grid-cell {
+  width: 80px;
+  height: 80px;
+  border: 2px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.grid-cell:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.grid-cell:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 768px) {
+  .color-grid {
+    grid-template-columns: repeat(3, 60px);
+    gap: 6px;
+  }
+
+  .grid-cell {
+    width: 60px;
+    height: 60px;
+  }
+}
