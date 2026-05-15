@@ -100,3 +100,126 @@ class Cube:
             'L': s[36:45],
             'B': s[45:54],
         }
+
+    def apply_move(self, move):
+        """
+        Apply a single move to the cube state.
+        
+        Args:
+            move: Move string (e.g., 'R', 'U'', 'F2')
+            
+        Modifies self.state in place.
+        """
+        # Extract base move and modifier
+        base = move[0] if move[0].isalpha() else None
+        modifier = move[1:] if len(move) > 1 else ''
+        
+        if not base or base not in self.FACES:
+            raise ValueError(f"Invalid move: {move}")
+        
+        # Apply the move based on type
+        if modifier == '2':
+            self._rotate_face(base)
+            self._rotate_face(base)
+        elif modifier == "'":
+            # Prime move = 3 clockwise rotations
+            for _ in range(3):
+                self._rotate_face(base)
+        else:
+            # Single clockwise rotation
+            self._rotate_face(base)
+    
+    def _rotate_face(self, face):
+        """
+        Rotate a single face clockwise.
+        
+        Args:
+            face: Face to rotate ('U', 'R', 'F', 'D', 'L', 'B')
+        """
+        s = list(self.state)
+        
+        if face == 'U':
+            # Rotate U face clockwise
+            # Cycle: F_top <- L_top <- B_top <- R_top <- F_top
+            temp = [s[0], s[1], s[2]]
+            s[0:3] = [s[36], s[37], s[38]]  # L top -> U
+            s[36:39] = [s[45], s[46], s[47]]  # B top -> L top
+            s[45:48] = [s[9], s[10], s[11]]  # R top -> B top
+            s[9:12] = temp  # F top -> R top (saved in temp)
+            # Rotate the U face itself
+            s[0:9] = self._rotate_face_clockwise(s[0:9])
+            
+        elif face == 'D':
+            # Rotate D face clockwise
+            # Cycle: F_bottom -> R_bottom -> B_bottom -> L_bottom -> F_bottom
+            temp = [s[24], s[25], s[26]]
+            s[24:27] = [s[15], s[16], s[17]]  # R bottom -> F bottom
+            s[15:18] = [s[33], s[34], s[35]]  # B bottom -> R bottom
+            s[33:36] = [s[42], s[43], s[44]]  # L bottom -> B bottom
+            s[42:45] = temp  # F bottom -> L bottom (saved in temp)
+            # Rotate the D face itself
+            s[27:36] = self._rotate_face_clockwise(s[27:36])
+            
+        elif face == 'L':
+            # Rotate L face clockwise
+            # Cycle: F_left <- U_left <- B_right <- D_left <- F_left
+            temp = [s[18], s[21], s[24]]
+            s[18], s[21], s[24] = s[0], s[3], s[6]  # U left -> F left
+            s[0], s[3], s[6] = s[47], s[50], s[53]  # B right (reversed) -> U left
+            s[47], s[50], s[53] = s[27], s[30], s[33]  # D left (reversed) -> B right
+            s[27], s[30], s[33] = temp[0], temp[1], temp[2]  # F left -> D left
+            # Rotate the L face itself
+            s[36:45] = self._rotate_face_clockwise(s[36:45])
+            
+        elif face == 'R':
+            # Rotate R face clockwise
+            # Cycle: F_right -> U_right -> B_left -> D_right -> F_right
+            temp = [s[20], s[23], s[26]]
+            s[20], s[23], s[26] = s[6], s[3], s[0]  # U right (reversed) -> F right
+            s[6], s[3], s[0] = s[29], s[32], s[35]  # B left (reversed) -> U right
+            s[29], s[32], s[35] = s[26], s[23], s[20]  # D right (reversed) -> B left
+            s[26], s[23], s[20] = temp[0], temp[1], temp[2]  # F right -> D right
+            # Rotate the R face itself
+            s[9:18] = self._rotate_face_clockwise(s[9:18])
+            
+        elif face == 'F':
+            # Rotate F face clockwise
+            # Cycle: U_bottom -> R_left -> D_top -> L_right -> U_bottom
+            temp = [s[6], s[7], s[8]]
+            s[6:9] = [s[36], s[39], s[42]]  # L right -> U bottom
+            s[36], s[39], s[42] = s[27], s[28], s[29]  # D top -> L right
+            s[27:30] = [s[11], s[14], s[17]]  # R left -> D top
+            s[11], s[14], s[17] = temp[2], temp[1], temp[0]  # U bottom -> R left (reversed)
+            # Rotate the F face itself
+            s[18:27] = self._rotate_face_clockwise(s[18:27])
+            
+        elif face == 'B':
+            # Rotate B face clockwise
+            # Cycle: U_top <- R_right <- D_bottom <- L_left <- U_top
+            temp = [s[0], s[1], s[2]]
+            s[0:3] = [s[9], s[12], s[15]]  # R right -> U top
+            s[9], s[12], s[15] = s[33], s[34], s[35]  # D bottom -> R right
+            s[33:36] = [s[44], s[41], s[38]]  # L left -> D bottom
+            s[38], s[41], s[44] = temp[2], temp[1], temp[0]  # U top -> L left (reversed)
+            # Rotate the B face itself
+            s[45:54] = self._rotate_face_clockwise(s[45:54])
+        
+        self.state = ''.join(s)
+    
+    @staticmethod
+    def _rotate_face_clockwise(face_str):
+        """
+        Rotate a 3x3 face clockwise.
+        
+        Face layout:
+        0 1 2
+        3 4 5
+        6 7 8
+        
+        After rotation:
+        6 3 0
+        7 4 1
+        8 5 2
+        """
+        f = list(face_str)
+        return ''.join([f[6], f[3], f[0], f[7], f[4], f[1], f[8], f[5], f[2]])

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'solvers'))
 
 from cube import Cube
 from solver import solve, get_solver_info
+from beginner_solver import solve_beginner, get_beginner_solver_info
 from color_detector import detect_cube_colors
 
 load_dotenv()
@@ -69,6 +70,48 @@ def solve_cube():
         moves = solve(cube)
         return jsonify({
             "success": True,
+            "solution": " ".join(moves),
+            "moves": moves,
+            "move_count": len(moves)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/solve-beginner', methods=['POST'])
+def solve_cube_beginner():
+    """Solve cube using beginner-friendly layer-by-layer method."""
+    try:
+        data = request.get_json()
+        state = data['state']
+
+        # 1. IDENTIFY CENTERS (The 5th sticker of each 9-block)
+        # Kociemba order: U, R, F, D, L, B
+        centers = {
+            state[4]:  'U',
+            state[13]: 'R',
+            state[22]: 'F',
+            state[31]: 'D',
+            state[40]: 'L',
+            state[49]: 'B'
+        }
+
+        if len(centers) < 6:
+            return jsonify({"success": False, "error": "Duplicate center colors detected"}), 400
+
+        # 2. TRANSLATE COLORS TO FACES
+        translated_state = "".join([centers[color] for color in state])
+
+        # 3. PROCEED WITH THE TRANSLATED STRING
+        try:
+            cube = Cube(translated_state)
+        except ValueError as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+        moves = solve_beginner(cube)
+        return jsonify({
+            "success": True,
+            "solution": " ".join(moves),
             "moves": moves,
             "move_count": len(moves)
         })
