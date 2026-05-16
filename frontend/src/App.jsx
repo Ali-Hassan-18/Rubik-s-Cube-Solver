@@ -13,14 +13,14 @@ const SolverLogo = ({ size = 40 }) => (
   </svg>
 );
 
-// Kociemba mathematical optimization sequence orders for the 6 faces
+// Sequence configuration steps matching backend compiler pipeline arrays
 const SCAN_STEPS = [
-  { id: 'U', name: 'UP (Top Face - White Center)' },
-  { id: 'R', name: 'RIGHT (Right Face - Red Center)' },
-  { id: 'F', name: 'FRONT (Front Face - Green Center)' },
-  { id: 'D', name: 'DOWN (Bottom Face - Yellow Center)' },
-  { id: 'L', name: 'LEFT (Left Face - Orange Center)' },
-  { id: 'B', name: 'BACK (Rear Face - Blue Center)' }
+  { id: 'U', name: 'UP (Top Face)' },
+  { id: 'R', name: 'RIGHT (Right Face)' },
+  { id: 'F', name: 'FRONT (Front Face)' },
+  { id: 'D', name: 'DOWN (Bottom Face)' },
+  { id: 'L', name: 'LEFT (Left Face)' },
+  { id: 'B', name: 'BACK (Rear Face)' }
 ];
 
 function App() {
@@ -30,8 +30,6 @@ function App() {
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('manual');
   const [darkMode, setDarkMode] = useState(false);
-  
-  // Sequential pointer tracing through 6 index items
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   const moveList = useMemo(() => {
@@ -39,7 +37,6 @@ function App() {
     return solution.solution.trim().split(/\s+/);
   }, [solution]);
 
-  // 🔥 FIXED: Direct absolute path to Flask backend to prevent HTML proxy fallback crashes
   const handleSolve = useCallback((cubeState) => {
     setLoading(true);
     setError(null);
@@ -55,7 +52,6 @@ function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Multi-step handler mapping individual photos sequentially using OpenCV endpoint
   const handleFaceScan = useCallback(async (fileObject) => {
     if (!fileObject) return;
     
@@ -68,7 +64,6 @@ function App() {
     formData.append('face', activeFace);
 
     try {
-      // Using explicit 127.0.0.1 loopback IP for clean cross-origin connection
       const response = await fetch('http://127.0.0.1:5000/api/upload-face', {
         method: 'POST',
         body: formData,
@@ -81,12 +76,10 @@ function App() {
         return;
       }
 
-      // Check if this was the 6th and final side processed
       if (data.all_sides_complete) {
         setSolution(data);
-        setCurrentStepIndex(0); // Reset index mapping
+        setCurrentStepIndex(0); 
       } else {
-        // Increment array index counter layout sequentially to advance instructions
         setCurrentStepIndex((prev) => prev + 1);
       }
     } catch (err) {
@@ -100,7 +93,6 @@ function App() {
     setSolution(null);
     setError(null);
     setCurrentStepIndex(0);
-    // Flush current temporary processing cache on Python memory
     fetch('http://127.0.0.1:5000/api/reset-scan', { method: 'POST' }).catch(() => {});
   };
 
@@ -114,7 +106,6 @@ function App() {
     </button>
   );
 
-  // 1. Landing Page UI Layout Viewport
   if (!isStarted) {
     return (
       <div className={`landing-hero ${darkMode ? 'dark' : ''}`}>
@@ -140,7 +131,6 @@ function App() {
     );
   }
 
-  // 2. Main Professional Workspace Interface Layout
   return (
     <div className={`app-root${darkMode ? ' dark' : ''}`}>
       <nav className="top-nav">
@@ -167,7 +157,6 @@ function App() {
             </div>
           </section>
 
-          {/* Render progress bars only when executing active multi-face capture sessions */}
           {mode === 'image' && !solution && (
             <section className="sidebar-group scan-progress-section">
               <label className="sidebar-label">SCANNING PROGRESS</label>
@@ -210,7 +199,7 @@ function App() {
                 <h3 className="guided-step-title" style={{ color: '#4f46e5', marginBottom: '20px' }}>
                   Please Upload Side: <span className="highlight-step" style={{ background: '#e0e7ff', padding: '4px 10px', borderRadius: '6px' }}>{SCAN_STEPS[currentStepIndex].name}</span>
                 </h3>
-                <ImageUpload onDetect={handleFaceScan} />
+                <ImageUpload onDetect={handleFaceScan} loading={loading} />
               </div>
             )}
           </div>
