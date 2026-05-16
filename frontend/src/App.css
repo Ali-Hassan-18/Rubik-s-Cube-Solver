@@ -277,6 +277,35 @@ body { font-family: 'Times New Roman', Times, serif; background: var(--bg-cream)
 .nav-brand:hover .brand-main { color: var(--accent); }
 .brand-sub { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1.5px; display: block; }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.back-btn {
+  padding: 10px 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease);
+}
+
+.back-btn:hover {
+  background: var(--accent);
+  color: white;
+  transform: translateX(-4px);
+  box-shadow: 0 8px 15px var(--accent-soft);
+}
+
+.back-btn:active {
+  transform: translateX(-4px) scale(0.98);
+}
+
 /* Solution Notation Bar */
 .notation-bar {
   background: var(--bg-panel); border-bottom: 1px solid rgba(0,0,0,0.05);

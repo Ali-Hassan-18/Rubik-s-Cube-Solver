@@ -5,11 +5,11 @@ import '../styles/CubeInput.css';
 const FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
 const FACE_NAMES = {
   U: 'Up (Yellow)',
-  R: 'Right (Red)',
+  R: 'Right (Blue)',
   F: 'Front (Orange)',
   D: 'Down (White)',
   L: 'Left (Green)',
-  B: 'Back (Blue)',
+  B: 'Back (Red)',
 };
 const COLOR_NAMES = {
   W: 'White',
@@ -32,11 +32,11 @@ const COLOR_DISPLAY = {
 function CubeInput({ onSolve, loading }) {
   const [faces, setFaces] = useState({
     U: 'YYYYYYYYY',
-    R: 'RRRRRRRRR',
+    R: 'BBBBBBBBB',
     F: 'OOOOOOOOO',
     D: 'WWWWWWWWW',
     L: 'GGGGGGGGG',
-    B: 'BBBBBBBBB',
+    B: 'RRRRRRRRR',
   });
 
   const [selectedFace, setSelectedFace] = useState('U');
@@ -61,11 +61,11 @@ function CubeInput({ onSolve, loading }) {
   const reset = useCallback(() => {
     setFaces({
       U: 'YYYYYYYYY',
-      R: 'RRRRRRRRR',
+      R: 'BBBBBBBBB',
       F: 'OOOOOOOOO',
       D: 'WWWWWWWWW',
       L: 'GGGGGGGGG',
-      B: 'BBBBBBBBB',
+      B: 'RRRRRRRRR',
     });
   }, []);
 
