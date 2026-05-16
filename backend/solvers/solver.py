@@ -1,8 +1,21 @@
+import sys
+import os
+
+# Get the path of the current 'solvers' directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the path of the parent 'backend' directory
+parent_dir = os.path.dirname(current_dir)
+
+# Explicitly inject both paths into Python's search engine
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 import kociemba
-from cube import Cube
-
-
+from cube import Cube  # This absolutely cannot fail now!
 def solve(cube):
+
     """
     Solve a Rubik's cube using Kociemba's algorithm.
 

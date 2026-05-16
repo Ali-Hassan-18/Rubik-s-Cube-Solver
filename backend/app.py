@@ -1,143 +1,117 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os
-from dotenv import load_dotenv
-import sys
 
-# Add solvers directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'solvers'))
-
-from solvers.cube import Cube
-from solvers.solver import solve, get_solver_info
+# System paths dynamic injection (jo humne solver.py ke liye kiya tha)
 from solvers.color_detector import detect_cube_colors
-
-load_dotenv()
+from solvers.solver import solve
+from cube import Cube
 
 app = Flask(__name__)
+# CORS configuration allows your localhost:3000 frontend to safely make requests
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
-# Enable CORS for all routes
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+UPLOAD_FOLDER = 'temp_uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def translate_state_to_faces(state):
-    """
-    Translates a 54-char color string into a Kociemba-compatible face string.
-    Identifies centers automatically to handle any physical cube orientation.
-    """
-    if len(state) != 54:
-        raise ValueError(f"Cube state must be 54 characters, got {len(state)}")
+# Global dictionary to trace the 6 sides sequentially
+current_session_cube = {}
 
-    # Kociemba order: Up, Right, Front, Down, Left, Back
-    # Centers live at the 5th sticker of each group
-    center_indices = [4, 13, 22, 31, 40, 49]
-    face_letters = ['U', 'R', 'F', 'D', 'L', 'B']
+# Map centers to standard Kociemba notation tracking
+COLOR_TO_FACE_MAP = {
+    'W': 'U',  # White center -> Up
+    'R': 'R',  # Red center   -> Right
+    'G': 'F',  # Green center -> Front
+    'Y': 'D',  # Yellow center-> Down
+    'O': 'L',  # Orange center-> Left
+    'B': 'B'   # Blue center  -> Back
+}
+
+def translate_to_kociemba_string(cube_data):
+    kociemba_string = ""
+    face_order = ['U', 'R', 'F', 'D', 'L', 'B']
+    for face in face_order:
+        face_stickers = cube_data.get(face)
+        if not face_stickers or len(face_stickers) != 9:
+            raise ValueError(f"Face {face} matrix data is incomplete.")
+        for color in face_stickers:
+            translated_char = COLOR_TO_FACE_MAP.get(color, 'U')
+            kociemba_string += translated_char
+    return kociemba_string
+
+# ── 1. CAMERA SCAN ENDPOINT ──────────────────────────────────────────────────
+@app.route('/api/upload-face', methods=['POST'])
+def handle_face_upload():
+    if 'file' not in request.files or 'face' not in request.form:
+        return jsonify({'success': False, 'error': 'Missing file payload or face parameter'}), 400
+        
+    file = request.files['file']
+    face_id = request.form['face'].upper()
     
-    mapping = {}
-    for i, face in zip(center_indices, face_letters):
-        color = state[i]
-        if color in mapping:
-            raise ValueError("Duplicate center colors detected. Each face must have a unique center color.")
-        mapping[color] = face
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(file_path)
     
-    if len(mapping) < 6:
-        raise ValueError("Could not map 6 unique faces. Please check your cube input layout.")
-
-    return "".join([mapping[color] for color in state])
-
-@app.route('/api/health', methods=['GET'])
-def health():
-    """Health check endpoint."""
-    return jsonify({
-        "status": "ok",
-        "service": "rubiks-cube-solver",
-        "version": "1.0.0"
-    })
-
-@app.route('/api/solver-info', methods=['GET'])
-def solver_info():
-    """Get information about the solver tier."""
-    return jsonify(get_solver_info())
-
-@app.route('/api/solve', methods=['POST'])
-def solve_cube():
-    """
-    Solve a cube optimally using its visual state orientation matrix.
-    """
     try:
-        data = request.get_json()
-        if not data or 'state' not in data:
-            return jsonify({"success": False, "error": "Missing 'state' field"}), 400
-
-        # Translate input color mappings to standard spatial vectors
-        try:
-            translated_state = translate_state_to_faces(data['state'])
-            cube = Cube(translated_state) 
-        except ValueError as e:
-            return jsonify({"success": False, "error": str(e)}), 400
-
-        moves = solve(cube)
+        detected_colors = detect_cube_colors(file_path)
+        os.remove(file_path)
+        
+        current_session_cube[face_id] = detected_colors
+        is_complete = len(current_session_cube) == 6
+        solution_moves = None
+        
+        if is_complete:
+            kociemba_state_str = translate_to_kociemba_string(current_session_cube)
+            
+            my_cube = Cube()
+            if hasattr(my_cube, 'set_state'):
+                my_cube.set_state(kociemba_state_str)
+            else:
+                my_cube.state = kociemba_state_str
+                
+            raw_moves_list = solve(my_cube)
+            solution_moves = " ".join(raw_moves_list)
+            current_session_cube.clear()
+            
         return jsonify({
-            "success": True,
-            "solution": " ".join(moves),
-            "moves": moves,
-            "move_count": len(moves)
+            'success': True,
+            'face_recorded': face_id,
+            'detected_colors': detected_colors,
+            'all_sides_complete': is_complete,
+            'solution': solution_moves
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/validate-cube', methods=['POST'])
-def validate_cube():
-    """Validate structural legality of a given configuration string."""
+# ── 2. MANUAL GRID ENDPOINT ──────────────────────────────────────────────────
+@app.route('/api/solve', methods=['POST'])
+def handle_manual_solve():
+    data = request.get_json()
+    if not data or 'state' not in data:
+        return jsonify({'success': False, 'error': 'No state array passed'}), 400
+        
     try:
-        data = request.get_json()
-        if not data or 'state' not in data:
-            return jsonify({"valid": False, "error": "Missing 'state' field"}), 400
-
-        try:
-            translated = translate_state_to_faces(data['state'])
-            Cube(translated)
-            return jsonify({"valid": True})
-        except ValueError as e:
-            return jsonify({"valid": False, "error": str(e)})
-
-    except Exception as e:
-        return jsonify({"valid": False, "error": str(e)}), 500
-
-@app.route('/api/detect-colors', methods=['POST'])
-def detect_colors():
-    """Detect cube colors from an uploaded image file."""
-    try:
-        if 'image' not in request.files:
-            return jsonify({"success": False, "error": "No image file provided"}), 400
-
-        image_file = request.files['image']
-        if image_file.filename == '':
-            return jsonify({"success": False, "error": "No image selected"}), 400
-
-        image_data = image_file.read()
-        result = detect_cube_colors(image_data)
-
-        if result.get("success"):
-            return jsonify({
-                "success": True,
-                "colors": result.get("colors")
-            })
+        my_cube = Cube()
+        if hasattr(my_cube, 'set_state'):
+            my_cube.set_state(data['state'])
         else:
-            return jsonify({
-                "success": False,
-                "error": result.get("error", "Vision engine failed to classify grid values")
-            }), 400
-
+            my_cube.state = data['state']
+            
+        raw_moves_list = solve(my_cube)
+        solution_moves = " ".join(raw_moves_list)
+        
+        return jsonify({
+            'success': True,
+            'solution': solution_moves
+        })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({"error": "Internal server error"}), 500
+@app.route('/api/reset-scan', methods=['POST'])
+def reset_scan_state():
+    current_session_cube.clear()
+    return jsonify({'success': True, 'message': 'Flushed session'})
 
 if __name__ == '__main__':
-    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug, host='0.0.0.0', port=5000)
+    app.run(port=5000, debug=True)

@@ -4,7 +4,6 @@ import '../styles/ImageUpload.css';
 function ImageUpload({ onDetect, loading }) {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [detectedColors, setDetectedColors] = useState(null);
   const [error, setError] = useState(null);
 
   const handleImageChange = (e) => {
@@ -13,37 +12,26 @@ function ImageUpload({ onDetect, loading }) {
       setImage(file);
       setPreview(URL.createObjectURL(file));
       setError(null);
-      setDetectedColors(null);
     }
   };
 
-  const handleUpload = async () => {
+  // 🔥 CRITICAL FIX: Ab hum sara kaam App.jsx ke handleFaceScan pipeline ko handover kar rahe hain
+  const handleUpload = () => {
     if (!image) {
       setError('Please select an image first');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('image', image);
+    if (onDetect) {
+      // Yeh line chupke se file object ko App.jsx ke paas bhej degi
+      onDetect(image);
 
-    try {
-      const response = await fetch('/api/detect-colors', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setDetectedColors(data.colors);
-        // Pass the detected state to solve
-        const state = Object.values(data.colors).join('');
-        onDetect(state);
-      } else {
-        setError(data.error || 'Failed to detect colors');
-      }
-    } catch (err) {
-      setError('Error uploading image: ' + err.message);
+      // Reset fields taake aglay face ki photo ke liye clean workspace milay
+      setImage(null);
+      setPreview(null);
+      setError(null);
+    } else {
+      setError('System Error: Tracking callback is missing.');
     }
   };
 
@@ -76,31 +64,13 @@ function ImageUpload({ onDetect, loading }) {
 
       {error && <div className="error-message">{error}</div>}
 
-      {detectedColors && (
-        <div className="detected-colors">
-          <h3>Detected Colors:</h3>
-          <div className="faces-display">
-            {Object.entries(detectedColors).map(([face, colors]) => (
-              <div key={face} className="face-display">
-                <h4>Face {face}</h4>
-                <div className="colors-grid">
-                  {colors.split('').map((color, idx) => (
-                    <div key={idx} className="color-dot" title={color} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="button-group">
         <button
           className="detect-btn"
           onClick={handleUpload}
           disabled={!image || loading}
         >
-          {loading ? 'Detecting...' : 'Detect Colors & Solve'}
+          {loading ? 'Detecting Matrix Configuration...' : 'Detect Colors & Save Side'}
         </button>
       </div>
 

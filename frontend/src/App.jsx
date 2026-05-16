@@ -13,6 +13,16 @@ const SolverLogo = ({ size = 40 }) => (
   </svg>
 );
 
+// Kociemba mathematical optimization sequence orders for the 6 faces
+const SCAN_STEPS = [
+  { id: 'U', name: 'UP (Top Face - White Center)' },
+  { id: 'R', name: 'RIGHT (Right Face - Red Center)' },
+  { id: 'F', name: 'FRONT (Front Face - Green Center)' },
+  { id: 'D', name: 'DOWN (Bottom Face - Yellow Center)' },
+  { id: 'L', name: 'LEFT (Left Face - Orange Center)' },
+  { id: 'B', name: 'BACK (Rear Face - Blue Center)' }
+];
+
 function App() {
   const [isStarted, setIsStarted] = useState(false);
   const [solution, setSolution] = useState(null);
@@ -20,17 +30,21 @@ function App() {
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('manual');
   const [darkMode, setDarkMode] = useState(false);
+  
+  // Sequential pointer tracing through 6 index items
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   const moveList = useMemo(() => {
     if (!solution?.solution) return [];
     return solution.solution.trim().split(/\s+/);
   }, [solution]);
 
+  // 🔥 FIXED: Direct absolute path to Flask backend to prevent HTML proxy fallback crashes
   const handleSolve = useCallback((cubeState) => {
     setLoading(true);
     setError(null);
     
-    fetch('/api/solve', {
+    fetch('http://127.0.0.1:5000/api/solve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state: cubeState }),
@@ -40,6 +54,55 @@ function App() {
       .catch((err) => setError('Solver Error: ' + err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Multi-step handler mapping individual photos sequentially using OpenCV endpoint
+  const handleFaceScan = useCallback(async (fileObject) => {
+    if (!fileObject) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    const activeFace = SCAN_STEPS[currentStepIndex].id;
+    const formData = new FormData();
+    formData.append('file', fileObject);
+    formData.append('face', activeFace);
+
+    try {
+      // Using explicit 127.0.0.1 loopback IP for clean cross-origin connection
+      const response = await fetch('http://127.0.0.1:5000/api/upload-face', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        setError(data.error);
+        return;
+      }
+
+      // Check if this was the 6th and final side processed
+      if (data.all_sides_complete) {
+        setSolution(data);
+        setCurrentStepIndex(0); // Reset index mapping
+      } else {
+        // Increment array index counter layout sequentially to advance instructions
+        setCurrentStepIndex((prev) => prev + 1);
+      }
+    } catch (err) {
+      setError('Connection to computer vision engine failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentStepIndex]);
+
+  const resetAnalysisState = () => {
+    setSolution(null);
+    setError(null);
+    setCurrentStepIndex(0);
+    // Flush current temporary processing cache on Python memory
+    fetch('http://127.0.0.1:5000/api/reset-scan', { method: 'POST' }).catch(() => {});
+  };
 
   const ThemeToggle = () => (
     <button 
@@ -51,20 +114,14 @@ function App() {
     </button>
   );
 
-  // 1. Landing Page
+  // 1. Landing Page UI Layout Viewport
   if (!isStarted) {
     return (
       <div className={`landing-hero ${darkMode ? 'dark' : ''}`}>
         <div className="landing-overlay"></div>
-        
-        <div className="landing-actions">
-          <ThemeToggle />
-        </div>
-
+        <div className="landing-actions"><ThemeToggle /></div>
         <div className="hero-content">
-          <div className="hero-visual">
-            <SolverLogo size={115} />
-          </div>
+          <div className="hero-visual"><SolverLogo size={115} /></div>
           <h1 className="hero-title">RUBIK'S CUBE <span className="accent-glow">SOLVER</span></h1>
           <p className="hero-tagline">
             A masterclass in precision: a premium interface powered by 
@@ -83,11 +140,11 @@ function App() {
     );
   }
 
-  // 2. Main Workspace Interface
+  // 2. Main Professional Workspace Interface Layout
   return (
     <div className={`app-root${darkMode ? ' dark' : ''}`}>
       <nav className="top-nav">
-        <div className="nav-brand" onClick={() => { setIsStarted(false); setSolution(null); }}>
+        <div className="nav-brand" onClick={() => { setIsStarted(false); resetAnalysisState(); }}>
           <SolverLogo size={32} />
           <div className="brand-text">
             <span className="brand-main">Rubik's Solver</span>
@@ -95,14 +152,7 @@ function App() {
           </div>
         </div>
         <div className="nav-actions">
-          <button 
-            className="back-btn"
-            onClick={() => { setIsStarted(false); setSolution(null); }}
-            aria-label="Go Back"
-            title="Back to landing page"
-          >
-            ← Back
-          </button>
+          <button className="back-btn" onClick={() => { setIsStarted(false); resetAnalysisState(); }}>← Back</button>
           <ThemeToggle />
         </div>
       </nav>
@@ -117,6 +167,18 @@ function App() {
             </div>
           </section>
 
+          {/* Render progress bars only when executing active multi-face capture sessions */}
+          {mode === 'image' && !solution && (
+            <section className="sidebar-group scan-progress-section">
+              <label className="sidebar-label">SCANNING PROGRESS</label>
+              <div className="scan-steps-indicator">
+                <p className="active-step-banner">Current Target: <b>{SCAN_STEPS[currentStepIndex].id}</b></p>
+                <progress max="6" value={currentStepIndex} className="premium-progress-bar" />
+                <span className="step-fraction-sub">{currentStepIndex}/6 Sides Processed</span>
+              </div>
+            </section>
+          )}
+
           <section className="sidebar-group">
             <label className="sidebar-label">ANALYTICS</label>
             <div className="stats-grid">
@@ -127,18 +189,30 @@ function App() {
             </div>
           </section>
 
-          <button className="reset-btn" onClick={() => setSolution(null)}>Reset Analysis</button>
+          <button className="reset-btn" onClick={resetAnalysisState}>Reset Analysis</button>
         </aside>
 
         <main className="main-viewport">
+          {error && <div className="error-toast-banner">⚠️ {error}</div>}
+          
           <div className={`panel-3d ${loading ? 'loading' : ''}`}>
             {loading && (
               <div className="glass-loader">
                 <div className="spinner" />
-                <p>Computing optimal path...</p>
+                <p>Analyzing Matrix configurations...</p>
               </div>
             )}
-            {mode === 'manual' ? <CubeInput onSolve={handleSolve} /> : <ImageUpload onDetect={handleSolve} />}
+            
+            {mode === 'manual' ? (
+              <CubeInput onSolve={handleSolve} />
+            ) : (
+              <div className="guided-scan-container" style={{ textAlign: 'center', width: '100%' }}>
+                <h3 className="guided-step-title" style={{ color: '#4f46e5', marginBottom: '20px' }}>
+                  Please Upload Side: <span className="highlight-step" style={{ background: '#e0e7ff', padding: '4px 10px', borderRadius: '6px' }}>{SCAN_STEPS[currentStepIndex].name}</span>
+                </h3>
+                <ImageUpload onDetect={handleFaceScan} />
+              </div>
+            )}
           </div>
 
           {solution && (
