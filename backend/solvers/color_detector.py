@@ -28,14 +28,14 @@ def get_neighborhood_median_hsv(hsv_img, cx, cy, radius=4):
     # Extract the pixel window region
     kernel_region = hsv_img[y_min:y_max, x_min:x_max]
     
-    # Compute median across both dimensions to eliminate outlier anomalies (like black logo ink)
+    # Compute median across both dimensions to eliminate outlier anomalies
     median_hsv = np.median(kernel_region, axis=(0, 1))
     return median_hsv
 
 def detect_cube_colors(image_bytes):
     """
     Advanced Hybrid Vision Engine: Slices the camera frame into a geometric 3x3 layout
-    and uses neighborhood kernel sampling to resist physical surface imperfections.
+    optimized for edge-to-edge square cropped canvas elements.
     """
     try:
         # Convert binary stream payload into an OpenCV BGR image matrix
@@ -49,24 +49,26 @@ def detect_cube_colors(image_bytes):
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         detected_sequence = []
 
-        # Define 3x3 bounding frame matrices (assumes face is generally centered)
-        margin_x = int(w * 0.18)
-        margin_y = int(h * 0.18)
+        # FIX: Reduce margins from 18% down to 5%. Because the frontend crop tool
+        # isolates the face frame tightly, we only need a minor 5% padding to 
+        # stay clear of the outer plastic bevel edges.
+        margin_x = int(w * 0.05)
+        margin_y = int(h * 0.05)
         grid_w = int((w - (2 * margin_x)) / 3)
         grid_h = int((h - (2 * margin_y)) / 3)
         
-        # Traverse the grid layout sequentially
+        # Traverse the grid layout sequentially (3x3 grid)
         for row in range(3):
             for col in range(3):
-                # Target center coordinates of that specific tile space
+                # Calculate the center point coordinates of each grid cell
                 cx = margin_x + (col * grid_w) + int(grid_w / 2)
                 cy = margin_y + (row * grid_h) + int(grid_h / 2)
                 
-                # Prevent bounding edge overflow crashes
+                # Prevent bounding edge overflow coordinates
                 cx = min(max(0, cx), w - 1)
                 cy = min(max(0, cy), h - 1)
                 
-                # FIX: Use kernel neighborhood sampler instead of single pixel reading
+                # Extract clean HSV data via neighborhood kernel window
                 robust_hsv = get_neighborhood_median_hsv(hsv_img, cx, cy, radius=4)
                 
                 color_token = get_color_name(robust_hsv[0], robust_hsv[1], robust_hsv[2])

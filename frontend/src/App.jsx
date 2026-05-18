@@ -23,6 +23,9 @@ const SCAN_STEPS = [
   { id: 'B', name: 'BACK (Rear Face)' }
 ];
 
+// Automatically switches between your live deployed backend or local server fallback
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000';
+
 function App() {
   const [isStarted, setIsStarted] = useState(false);
   const [solution, setSolution] = useState(null);
@@ -31,6 +34,9 @@ function App() {
   const [mode, setMode] = useState('manual');
   const [darkMode, setDarkMode] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  
+  // Mobile responsive sidebar drawer state tracking
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const moveList = useMemo(() => {
     if (!solution?.solution) return [];
@@ -41,7 +47,7 @@ function App() {
     setLoading(true);
     setError(null);
     
-    fetch('http://127.0.0.1:5000/api/solve', {
+    fetch(`${API_BASE_URL}/api/solve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state: cubeState }),
@@ -64,7 +70,7 @@ function App() {
     formData.append('face', activeFace);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/upload-face', {
+      const response = await fetch(`${API_BASE_URL}/api/upload-face`, {
         method: 'POST',
         body: formData,
       });
@@ -93,7 +99,12 @@ function App() {
     setSolution(null);
     setError(null);
     setCurrentStepIndex(0);
-    fetch('http://127.0.0.1:5000/api/reset-scan', { method: 'POST' }).catch(() => {});
+    setIsSidebarOpen(false);
+    fetch(`${API_BASE_URL}/api/reset-scan`, { method: 'POST' }).catch(() => {});
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen((prev) => !prev);
   };
 
   const ThemeToggle = () => (
@@ -134,13 +145,27 @@ function App() {
   return (
     <div className={`app-root${darkMode ? ' dark' : ''}`}>
       <nav className="top-nav">
-        <div className="nav-brand" onClick={() => { setIsStarted(false); resetAnalysisState(); }}>
-          <SolverLogo size={32} />
-          <div className="brand-text">
-            <span className="brand-main">Rubik's Solver</span>
-            <span className="brand-sub">Professional Workspace</span>
+        <div className="nav-left-group">
+          {/* Mobile Side Menu Trigger Button */}
+          <button 
+            className={`hamburger-menu ${isSidebarOpen ? 'open' : ''}`} 
+            onClick={toggleSidebar}
+            aria-label="Toggle Controls Menu"
+          >
+            <span className="burger-bar"></span>
+            <span className="burger-bar"></span>
+            <span className="burger-bar"></span>
+          </button>
+
+          <div className="nav-brand" onClick={() => { setIsStarted(false); resetAnalysisState(); }}>
+            <SolverLogo size={32} />
+            <div className="brand-text">
+              <span className="brand-main">Rubik's Solver</span>
+              <span className="brand-sub">Professional Workspace</span>
+            </div>
           </div>
         </div>
+
         <div className="nav-actions">
           <button className="back-btn" onClick={() => { setIsStarted(false); resetAnalysisState(); }}>← Back</button>
           <ThemeToggle />
@@ -148,12 +173,25 @@ function App() {
       </nav>
 
       <div className="app-layout">
-        <aside className="sidebar">
+        {/* Mobile Dismissal Overlay Curtain */}
+        {isSidebarOpen && <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />}
+
+        <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <section className="sidebar-group">
             <label className="sidebar-label">INPUT METHOD</label>
             <div className="mode-tabs">
-              <button className={`mode-tab ${mode === 'manual' ? 'active' : ''}`} onClick={() => setMode('manual')}>Manual Grid</button>
-              <button className={`mode-tab ${mode === 'image' ? 'active' : ''}`} onClick={() => setMode('image')}>Camera Scan</button>
+              <button 
+                className={`mode-tab ${mode === 'manual' ? 'active' : ''}`} 
+                onClick={() => { setMode('manual'); setIsSidebarOpen(false); }}
+              >
+                Manual Grid
+              </button>
+              <button 
+                className={`mode-tab ${mode === 'image' ? 'active' : ''}`} 
+                onClick={() => { setMode('image'); setIsSidebarOpen(false); }}
+              >
+                Camera Scan
+              </button>
             </div>
           </section>
 
@@ -196,7 +234,7 @@ function App() {
               <CubeInput onSolve={handleSolve} />
             ) : (
               <div className="guided-scan-container" style={{ textAlign: 'center', width: '100%' }}>
-                <h3 className="guided-step-title" style={{ color: '#4f46e5', marginBottom: '20px' }}>
+                <h3 className="guided-step-title" style={{ color: '#4f46e5', marginBottom: '15px' }}>
                   Please Upload Side: <span className="highlight-step" style={{ background: '#e0e7ff', padding: '4px 10px', borderRadius: '6px' }}>{SCAN_STEPS[currentStepIndex].name}</span>
                 </h3>
                 <ImageUpload onDetect={handleFaceScan} loading={loading} />
