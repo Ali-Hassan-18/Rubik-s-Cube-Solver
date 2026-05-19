@@ -3,15 +3,16 @@ import numpy as np
 
 def get_color_name(h, s, v):
     """Maps raw HSV pixel values to standard Rubik's cube color characters."""
-    # Resilient color boundaries optimized for standard plastic cube shades
-    if s < 45 and v > 130: return 'W'      # White (Low saturation, high reflection)
-    if h < 8 or h > 168:                   # Red wraps around the 0/180 boundary
-        return 'O' if v < 120 else 'R'     # Value threshold separate deep red from orange
-    if 8 <= h < 22: return 'O'             # Orange
-    if 22 <= h < 38: return 'Y'            # Yellow
-    if 38 <= h < 86: return 'G'            # Green
-    if 86 <= h < 135: return 'B'           # Blue
-    return 'W'                             # Deflation safety boundary
+    # 📱 MOBILE-OPTIMIZED BOUNDARIES: 
+    # Widened saturation/value nets to absorb aggressive phone shadows and auto-HDR contrast shifts.
+    
+    if s < 60 and v > 100: return 'W'      # Absorbs grey-ish shadowed whites
+    if h < 11 or h > 165: return 'R'       # Phones push red wider; removed the brittle shadow (v) limit
+    if 11 <= h < 26: return 'O'            # Safely isolated Orange band
+    if 26 <= h < 42: return 'Y'            # Yellow
+    if 42 <= h < 85: return 'G'            # Green
+    if 85 <= h < 140: return 'B'           # Blue
+    return 'W'                             # Safety fallback
 
 def get_neighborhood_median_hsv(hsv_img, cx, cy, radius=4):
     """

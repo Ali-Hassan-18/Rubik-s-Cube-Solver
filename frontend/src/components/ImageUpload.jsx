@@ -91,12 +91,16 @@ function ImageUpload({ onDetect, loading }) {
     const scaleX = imgElement.naturalWidth / imgRect.width;
     const scaleY = imgElement.naturalHeight / imgRect.height;
 
+   // Determine exact pixel coordinates mapping directly to the source file
     let cropX = (frameRect.left - imgRect.left) * scaleX;
     let cropY = (frameRect.top - imgRect.top) * scaleY;
     let cropWidth = frameRect.width * scaleX;
-    let cropHeight = frameRect.height * scaleY;
+    
+    // 📱 MOBILE FIX: Ignore frameRect.height which contains sub-pixel rectangular rounding errors. 
+    // Force a flawless 1:1 mathematical square pixel slice based purely on the width.
+    let cropHeight = cropWidth; 
 
-    // Safety clamp to ensure OpenCV gets a flawless payload
+    // Dynamic Boundary Guard: Clamp values inside the natural source image dimensions
     cropX = Math.max(0, Math.min(cropX, imgElement.naturalWidth));
     cropY = Math.max(0, Math.min(cropY, imgElement.naturalHeight));
     cropWidth = Math.min(cropWidth, imgElement.naturalWidth - cropX);
