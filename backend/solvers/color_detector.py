@@ -3,15 +3,17 @@ import numpy as np
 
 def get_color_name(h, s, v):
     """Maps raw HSV pixel values to standard Rubik's cube color characters."""
-    # 📱 MOBILE-OPTIMIZED BOUNDARIES: 
-    # Widened saturation/value nets to absorb aggressive phone shadows and auto-HDR contrast shifts.
+    # 📱 THE 'AWB SHADOW' FIX:
+    # Phone cameras inject blue into shadows to fix warm lighting (Auto-White Balance).
+    # We drastically drop the 'Value' (brightness) threshold for White down to 60
+    # and raise the Saturation allowance so dark-grey shadows are caught as White.
     
-    if s < 60 and v > 100: return 'W'      # Absorbs grey-ish shadowed whites
-    if h < 11 or h > 165: return 'R'       # Phones push red wider; removed the brittle shadow (v) limit
-    if 11 <= h < 26: return 'O'            # Safely isolated Orange band
-    if 26 <= h < 42: return 'Y'            # Yellow
-    if 42 <= h < 85: return 'G'            # Green
-    if 85 <= h < 140: return 'B'           # Blue
+    if s < 65 and v > 60: return 'W'       # Catches deep, blue-tinted shadows on white stickers
+    if h < 11 or h > 160: return 'R'       # Red hue wrap-around
+    if 11 <= h < 25: return 'O'            # Safely isolated Orange band
+    if 25 <= h < 42: return 'Y'            # Yellow
+    if 42 <= h < 88: return 'G'            # Green (Expanded slightly to prevent cyan-bleed)
+    if 88 <= h < 145: return 'B'           # Blue
     return 'W'                             # Safety fallback
 
 def get_neighborhood_median_hsv(hsv_img, cx, cy, radius=4):
