@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import '../styles/ImageUpload.css';
 
 function ImageUpload({ onDetect, loading }) {
@@ -6,8 +6,11 @@ function ImageUpload({ onDetect, loading }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState(null);
   
-  // Normalized positioning states for tracking the selector element
-  const [cropBox, setCropBox] = useState({ x: 0, y: 0, size: 90 }); 
+  // Crop state with touch-tracking parameters
+  const [cropBox, setCropBox] = useState({ x: 5, y: 15, size: 90 }); 
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   const imageRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -17,10 +20,62 @@ function ImageUpload({ onDetect, loading }) {
       setImage(file);
       setPreview(URL.createObjectURL(file));
       setError(null);
-      setCropBox({ x: 5, y: 15, size: 90 }); // Default initial center placement
+      setCropBox({ x: 5, y: 15, size: 90 });
     }
   };
 
+  // ── TOUCH & MOUSE DRAG HANDLERS ──────────────────────────────────────────
+  const handlePointerDown = (e) => {
+    setIsDragging(true);
+    // Support both mouse clicks and mobile finger touches
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setDragStart({ x: clientX, y: clientY });
+  };
+
+  const handlePointerMove = useCallback((e) => {
+    if (!isDragging || !containerRef.current) return;
+    
+    // Prevent the screen from scrolling while the user is trying to drag the crop box
+    if (e.cancelable) e.preventDefault(); 
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const deltaX = clientX - dragStart.x;
+    const deltaY = clientY - dragStart.y;
+
+    const container = containerRef.current.getBoundingClientRect();
+    const deltaXPct = (deltaX / container.width) * 100;
+    const deltaYPct = (deltaY / container.height) * 100;
+
+    setCropBox((prev) => {
+      // Prevent the box from being dragged outside the image boundaries
+      let newX = Math.max(0, Math.min(prev.x + deltaXPct, 100 - prev.size));
+      let newY = Math.max(0, Math.min(prev.y + deltaYPct, 100 - prev.size));
+      return { ...prev, x: newX, y: newY };
+    });
+
+    setDragStart({ x: clientX, y: clientY });
+  }, [isDragging, dragStart]);
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleSizeChange = (e) => {
+    const newSize = parseInt(e.target.value);
+    setCropBox((prev) => {
+      // Auto-correct X and Y if expanding the size pushes the box out of bounds
+      let safeX = prev.x;
+      let safeY = prev.y;
+      if (safeX + newSize > 100) safeX = 100 - newSize;
+      if (safeY + newSize > 100) safeY = 100 - newSize;
+      return { x: safeX, y: safeY, size: newSize };
+    });
+  };
+
+  // ── CANVAS SLICING ENGINE ────────────────────────────────────────────────
   const executeNativeCanvasCrop = () => {
     if (!image || !preview) return;
 
@@ -30,33 +85,29 @@ function ImageUpload({ onDetect, loading }) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Get the exact real-time rendered dimensions and positions from the screen DOM
     const imgRect = imgElement.getBoundingClientRect();
     const frameRect = frameElement.getBoundingClientRect();
 
-    // Calculate real-time scaling factors between rendered layout and natural raw pixels
     const scaleX = imgElement.naturalWidth / imgRect.width;
     const scaleY = imgElement.naturalHeight / imgRect.height;
 
-    // Determine exact pixel coordinates mapping directly to the source file
     let cropX = (frameRect.left - imgRect.left) * scaleX;
     let cropY = (frameRect.top - imgRect.top) * scaleY;
     let cropWidth = frameRect.width * scaleX;
     let cropHeight = frameRect.height * scaleY;
 
-    // Dynamic Boundary Guard: Clamp values inside the natural source image dimensions to prevent clipping crashes
+    // Safety clamp to ensure OpenCV gets a flawless payload
     cropX = Math.max(0, Math.min(cropX, imgElement.naturalWidth));
     cropY = Math.max(0, Math.min(cropY, imgElement.naturalHeight));
     cropWidth = Math.min(cropWidth, imgElement.naturalWidth - cropX);
     cropHeight = Math.min(cropHeight, imgElement.naturalHeight - cropY);
 
-    // Enforce stand-alone 400x400 matrices output for high-performance OpenCV parsing
     canvas.width = 400;
     canvas.height = 400;
 
     ctx.drawImage(
       imgElement,
-      cropX, cropY, cropWidth, cropHeight, // Authentic unwarped coordinates
+      cropX, cropY, cropWidth, cropHeight, 
       0, 0, 400, 400
     );
 
@@ -65,7 +116,6 @@ function ImageUpload({ onDetect, loading }) {
         const croppedFile = new File([blob], "cropped_face.png", { type: "image/png" });
         onDetect(croppedFile);
         
-        // Flush states to clear memory buffers for the next side scan
         setImage(null);
         setPreview(null);
         setError(null);
@@ -75,82 +125,77 @@ function ImageUpload({ onDetect, loading }) {
     }, 'image/png');
   };
 
-  const adjustCropBoxDimensions = (dimension, change) => {
-    setCropBox((prev) => {
-      const updated = { ...prev };
-      if (dimension === 'size') {
-        updated.size = Math.min(Math.max(20, prev.size + change), 100);
-      } else if (dimension === 'x') {
-        updated.x = Math.min(Math.max(0, prev.x + change), 100 - prev.size);
-      } else if (dimension === 'y') {
-        updated.y = Math.min(Math.max(0, prev.y + change), 100);
-      }
-      return updated;
-    });
-  };
-
   return (
     <div className="image-upload">
       <h2>Capture / Scan Cube Face</h2>
       <p className="instructions">
-        Upload or take a face snapshot. Adjust the position controls below to frame the 
-        cube face cleanly inside the yellow selection square.
+        Upload or take a snapshot. <b>Drag the yellow box with your finger</b> to center it over the cube, and use the slider to zoom.
       </p>
 
       <div className="upload-area">
         {!preview ? (
           <label htmlFor="image-input" className="upload-label">
-            <span>📷 Click to Upload Face Image</span>
+            <span>📷 Tap to Open Mobile Camera</span>
             <input
               id="image-input"
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleImageChange}
               disabled={loading}
             />
           </label>
         ) : (
-          <div className="crop-workspace-container" ref={containerRef} style={{ position: 'relative', display: 'inline-block', width: '100%', maxWidth: '340px' }}>
+          <div 
+            className="crop-workspace-container" 
+            ref={containerRef}
+            onMouseMove={handlePointerMove}
+            onTouchMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onTouchEnd={handlePointerUp}
+          >
             <img 
               src={preview} 
               alt="Workspace Track" 
               ref={imageRef}
               className="preview-image" 
-              style={{ width: '100%', display: 'block', borderRadius: '12px' }}
             />
-            {/* Visual Crop Overlay Frame Layer */}
+            {/* Draggable Frame Layer */}
             <div 
               className="visual-crop-frame"
+              onMouseDown={handlePointerDown}
+              onTouchStart={handlePointerDown}
               style={{
                 position: 'absolute',
                 border: '3px solid #fab12f',
-                boxShadow: '0 0 0 4000px rgba(0, 0, 0, 0.55)', // Dim out peripheral background area
+                boxShadow: '0 0 0 4000px rgba(0, 0, 0, 0.65)', 
                 borderRadius: '8px',
                 left: `${cropBox.x}%`,
                 top: `${cropBox.y}%`,
                 width: `${cropBox.size}%`,
-                aspectRatio: '1 / 1', // FIX: Forces the display frame to remain a perfect un-squished square
-                pointerEvents: 'none',
-                transition: 'all 0.1s ease-out'
+                aspectRatio: '1 / 1', 
+                cursor: 'move',
+                touchAction: 'none' // Prevents the browser from zooming the webpage when touching the box
               }}
-            />
+            >
+              <div className="drag-indicator">✥</div>
+            </div>
           </div>
         )}
       </div>
 
       {preview && (
         <div className="crop-control-console">
-          <label className="control-label">Position Alignment Matrix</label>
-          <div className="control-row-grid">
-            <button onClick={() => adjustCropBoxDimensions('y', -4)}>▲ Up</button>
-            <button onClick={() => adjustCropBoxDimensions('y', 4)}>▼ Down</button>
-            <button onClick={() => adjustCropBoxDimensions('x', -4)}>◀ Left</button>
-            <button onClick={() => adjustCropBoxDimensions('x', 4)}>▶ Right</button>
-          </div>
-          <div className="control-row-grid size-row">
-            <button onClick={() => adjustCropBoxDimensions('size', 4)}>🔍 Zoom Out</button>
-            <button onClick={() => adjustCropBoxDimensions('size', -4)}>🔍 Zoom In</button>
-          </div>
+          <label className="control-label">Zoom Matrix Size</label>
+          <input 
+            type="range" 
+            className="modern-slider"
+            min="30" 
+            max="100" 
+            value={cropBox.size} 
+            onChange={handleSizeChange}
+          />
         </div>
       )}
 
@@ -160,7 +205,7 @@ function ImageUpload({ onDetect, loading }) {
         {preview ? (
           <>
             <button className="detect-btn active-crop" onClick={executeNativeCanvasCrop} disabled={loading}>
-              {loading ? 'Analyzing Contours...' : 'Confirm Crop & Process Face'}
+              {loading ? 'Analyzing...' : 'Confirm Crop & Scan'}
             </button>
             <button className="reset-btn cancel-btn" onClick={() => { setImage(null); setPreview(null); }} disabled={loading}>
               Retake Photo
