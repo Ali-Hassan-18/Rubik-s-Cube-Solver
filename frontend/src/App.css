@@ -616,11 +616,11 @@ body { font-family: 'Times New Roman', Times, serif; background: var(--bg-cream)
 }
 
 .preview-image {
-  width: 100%;
-  height: auto;
-  max-height: 60vh;
-  display: block; /* Removes baseline spacing */
-  object-fit: contain; /* CRITICAL: This completely stops the mobile squish */
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  object-fit: fill !important; /* Forces layout boxes to map perfectly to pixel inputs */
+  display: block;
 }
 
 /* ── Interactive Crop Overlay UI ─────────────────────────────────────── */
